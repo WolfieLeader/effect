@@ -45,7 +45,7 @@ export type DigestAlgorithm = "MD5" | "SHA-1" | "SHA-256" | "SHA-384" | "SHA-512
  * Hash algorithms supported for message authentication and password derivation.
  *
  * @category models
- * @since 5.0.0
+ * @since 4.1.0
  */
 export type HmacAlgorithm = Exclude<DigestAlgorithm, "MD5">
 
@@ -59,7 +59,7 @@ export type HmacAlgorithm = Exclude<DigestAlgorithm, "MD5">
  * The optional label must match the label used when decrypting the ciphertext.
  *
  * @category models
- * @since 5.0.0
+ * @since 4.1.0
  */
 export interface RsaOaepOptions {
   readonly publicKey: Uint8Array
@@ -259,7 +259,7 @@ export const Crypto: Context.Service<Crypto, Crypto> = Context.Service("effect/C
  * SHA-1 is available for legacy protocol compatibility.
  *
  * @category hashing
- * @since 5.0.0
+ * @since 4.1.0
  */
 export const hmac = (
   algorithm: HmacAlgorithm,
@@ -282,7 +282,7 @@ export const hmac = (
  * limits may be lower than JavaScript's safe integer limit.
  *
  * @category hashing
- * @since 5.0.0
+ * @since 4.1.0
  */
 export const pbkdf2 = (
   algorithm: HmacAlgorithm,
@@ -304,7 +304,7 @@ export const pbkdf2 = (
  * trusted source.
  *
  * @category encryption
- * @since 5.0.0
+ * @since 4.1.0
  */
 export const rsaOaepEncrypt = (
   options: RsaOaepOptions
