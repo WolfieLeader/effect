@@ -31,6 +31,7 @@ let harnessIdCounter = 0
 const makeHarness = (options: {
   readonly begin?: SqlError.SqlError | undefined
   readonly savepoint?: SqlError.SqlError | undefined
+  readonly commit?: SqlError.SqlError | undefined
   readonly rollbackSavepoint?: SqlError.SqlError | undefined
   readonly releaseSavepoint?: true | SqlError.SqlError | undefined
 } = {}) => {
@@ -75,12 +76,13 @@ const makeHarness = (options: {
         return Effect.void
       }),
     commit: () =>
-      Effect.flatMap(record("commit"), () =>
-        transactionActive
-          ? Effect.sync(() => {
-            transactionActive = false
-          })
-          : Effect.fail(sqlError("cannot commit - no transaction is active"))),
+      Effect.flatMap(record("commit"), () => {
+        if (!transactionActive) {
+          return Effect.fail(sqlError("cannot commit - no transaction is active"))
+        }
+        transactionActive = false
+        return options.commit === undefined ? Effect.void : Effect.fail(options.commit)
+      }),
     rollback: () =>
       Effect.flatMap(record("rollback"), () =>
         transactionActive
@@ -241,6 +243,17 @@ describe("SqlClient", () => {
           "rollback",
           "closeConnection"
         ])
+      }))
+
+    it.effect("propagates a failed commit as a typed error", () =>
+      Effect.gen(function*() {
+        const commitError = sqlError("deferred constraint violated")
+        const harness = makeHarness({ commit: commitError })
+
+        const exit = yield* Effect.exit(harness.withTransaction(Effect.succeed(1)))
+
+        assertTypedFailure(exit, commitError)
+        assert.deepStrictEqual(harness.calls, ["acquireConnection", "begin", "commit", "closeConnection"])
       }))
 
     it.effect("commits and returns the value when the wrapped effect succeeds", () =>

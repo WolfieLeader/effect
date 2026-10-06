@@ -1,6 +1,6 @@
 import { PgClient } from "@effect/sql-pg"
 import { assert, expect, it } from "@effect/vitest"
-import { Cause, DateTime, Deferred, Effect, Fiber, Option, Queue, Schedule, Schema, Stream, String } from "effect"
+import { DateTime, Deferred, Effect, Fiber, Option, Queue, Schedule, Schema, Stream, String } from "effect"
 import * as Reactivity from "effect/reactivity/Reactivity"
 import { Model } from "effect/schema"
 import { SqlClient, SqlError, SqlModel } from "effect/sql"
@@ -360,16 +360,26 @@ it.layer(PgContainer.layerClient, { timeout: "30 seconds" })("PgClient", (it) =>
   it.effect("fails a transaction whose COMMIT rolls back after a caught error", () =>
     Effect.gen(function*() {
       const sql = yield* PgClient.PgClient
-      const cause = yield* sql.withTransaction(Effect.gen(function*() {
+      const error = yield* Effect.flip(sql.withTransaction(Effect.gen(function*() {
         yield* Effect.ignore(sql`SELECT 1 / 0`)
-      })).pipe(Effect.sandbox, Effect.flip)
+      })))
 
-      assert.isTrue(Cause.hasDies(cause))
-      assert.isFalse(Cause.hasFails(cause))
-      const defect = Cause.squash(cause)
-      assert.instanceOf(defect, SqlError.SqlError)
-      assert.strictEqual(defect.reason._tag, "UnknownError")
-      assert.strictEqual(defect.reason.operation, "commit")
+      assert.instanceOf(error, SqlError.SqlError)
+      assert.strictEqual(error.reason._tag, "UnknownError")
+      assert.strictEqual(error.reason.operation, "commit")
+    }))
+
+  it.effect("fails a transaction with a typed error when COMMIT reports a deferred constraint violation", () =>
+    Effect.gen(function*() {
+      const sql = yield* PgClient.PgClient
+      const error = yield* Effect.flip(sql.withTransaction(Effect.gen(function*() {
+        yield* sql`CREATE TEMP TABLE deferred_unique (id INTEGER UNIQUE DEFERRABLE INITIALLY DEFERRED) ON COMMIT DROP`
+        yield* sql`INSERT INTO deferred_unique VALUES (1), (1)`
+      })))
+
+      assert.strictEqual(error.reason._tag, "UniqueViolation")
+      const rows = yield* sql.withTransaction(sql<{ value: number }>`SELECT 1 AS value`)
+      assert.deepStrictEqual(rows, [{ value: 1 }])
     }))
 })
 
@@ -379,16 +389,13 @@ it.layer(PgContainer.layerMakeClientUnprepared, { timeout: "30 seconds" })(
     it.effect("fails an aborted COMMIT and reuses the connection", () =>
       Effect.gen(function*() {
         const sql = yield* PgClient.PgClient
-        const cause = yield* sql.withTransaction(Effect.gen(function*() {
+        const error = yield* Effect.flip(sql.withTransaction(Effect.gen(function*() {
           yield* Effect.ignore(sql`SELECT 1 / 0`)
-        })).pipe(Effect.sandbox, Effect.flip)
+        })))
 
-        assert.isTrue(Cause.hasDies(cause))
-        assert.isFalse(Cause.hasFails(cause))
-        const defect = Cause.squash(cause)
-        assert.instanceOf(defect, SqlError.SqlError)
-        assert.strictEqual(defect.reason._tag, "UnknownError")
-        assert.strictEqual(defect.reason.operation, "commit")
+        assert.instanceOf(error, SqlError.SqlError)
+        assert.strictEqual(error.reason._tag, "UnknownError")
+        assert.strictEqual(error.reason.operation, "commit")
 
         const rows = yield* sql.withTransaction(sql<{ value: number }>`SELECT 1 AS value`)
         assert.deepStrictEqual(rows, [{ value: 1 }])

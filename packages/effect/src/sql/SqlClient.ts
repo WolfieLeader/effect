@@ -424,12 +424,12 @@ export const makeWithTransaction = <I, S>(options: {
                         )
                       ),
                       (exit) => {
-                        let effect: Effect.Effect<void>
+                        let effect: Effect.Effect<void, SqlError>
                         if (Exit.isSuccess(exit)) {
                           if (id === 0) {
                             span.event("db.transaction.commit", clock.currentTimeNanosUnsafe())
                             const onCommitFailure = options.onCommitFailure
-                            effect = Effect.orDie(options.commit(conn))
+                            effect = options.commit(conn)
                             if (onCommitFailure) {
                               effect = Effect.onError(effect, () => Effect.orDie(onCommitFailure(conn)))
                             }
